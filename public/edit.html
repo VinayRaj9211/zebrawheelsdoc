@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Edit rate list · Zebra Wheels</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <div>
+        <strong>EDIT LATEST FILE</strong>
+        <span class="sub">Only this update can be changed</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a href="/">Back</a>
+      <button class="primary" id="save-button" type="button" style="width:auto">Save</button>
+    </div>
+  </header>
+  <main class="wrap">
+    <p class="swipe-note">Swipe sideways to reach every price. Press and hold a row to move it.</p>
+    <article class="sheet editing" id="editor">
+      <input class="title-input" id="company" aria-label="Company name" autocomplete="off">
+      <input class="address-input" id="address" aria-label="Address" autocomplete="off">
+      <label class="mobile-line">MOBILE No:-
+        <input id="mobile" aria-label="Mobile numbers" autocomplete="off">
+      </label>
+      <h2 class="doc-rate">RATE LIST</h2>
+      <h3 class="doc-local">LOCAL CHARGES:</h3>
+      <div class="table-scroll">
+        <table id="rate-table">
+          <thead>
+            <tr>
+              <th>TYPES OF<br>VEHICLE</th>
+              <th>8HOURS/80KM<br>FULL DAY</th>
+              <th>12HRS/200KM</th>
+              <th>EXTRA<br>KM(per km)</th>
+              <th>EXTRA HRS<br>(per hour)</th>
+              <th>NIGHT<br>CHARGES</th>
+              <th class="actions-col"><span class="sr-only">Move</span></th>
+            </tr>
+          </thead>
+          <tbody id="local-body"></tbody>
+          <tbody id="out-body"></tbody>
+        </table>
+      </div>
+      <div class="editor-tools">
+        <button class="secondary" id="add-toggle" type="button">+ Add row</button>
+        <p class="hint desktop-only">Use the arrows to move a row up or down.</p>
+        <p class="hint mobile-only">Press and hold a row, then use Up or Down.</p>
+        <div class="draft-actions" id="draft-actions" hidden>
+          <button class="primary" id="commit-drafts" type="button">Add filled rows</button>
+          <button class="ghost" id="cancel-drafts" type="button">Cancel</button>
+        </div>
+        <p class="error save-error" id="editor-error" role="alert"></p>
+      </div>
+      <h3 class="doc-terms">Terms &amp; Condition</h3>
+      <textarea id="terms" aria-label="Terms and conditions, one item per line"></textarea>
+      <div class="signs">
+        <div class="sign" id="sign-left">Provided By</div>
+        <div class="sign" id="sign-right"></div>
+      </div>
+    </article>
+  </main>
+  <div class="movebar" id="movebar" hidden>
+    <p id="move-label">Row</p>
+    <div class="movebar-actions">
+      <button type="button" id="move-up">Up</button>
+      <button type="button" id="move-down">Down</button>
+      <button type="button" id="move-remove">Remove</button>
+      <button type="button" id="move-done">Done</button>
+    </div>
+  </div>
+  <script src="/js/format.js"></script>
+  <script src="/js/edit.js"></script>
+</body>
+</html>

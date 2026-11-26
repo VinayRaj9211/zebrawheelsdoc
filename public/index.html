@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Zebra Wheels Travels</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <section id="login-screen" class="login-screen">
+    <form class="login-card" id="login-form">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <h1>Zebra Wheels Travels</h1>
+      <p class="lede">Sign in to open the rate list.</p>
+      <label class="field">Username
+        <input id="username" name="username" autocomplete="username" autocapitalize="none" required>
+      </label>
+      <label class="field">Password
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" id="login-button" type="submit">Sign in</button>
+      <p class="error" id="login-error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="home-screen" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <div>
+          <strong>ZEBRA WHEELS</strong>
+          <span class="sub" id="signed-in"></span>
+        </div>
+      </div>
+      <button class="text-btn" id="logout" type="button">Log out</button>
+    </header>
+    <main class="wrap">
+      <div class="meta-row">
+        <div>
+          <p class="when-label" id="when-label">Last updated</p>
+          <p class="older-note" id="older-note" hidden>You are viewing an older update. Only the latest file can be edited.</p>
+        </div>
+        <div class="file-actions">
+          <button class="secondary" id="edit-button" type="button">Edit</button>
+          <button class="primary" id="download-button" type="button">Download</button>
+        </div>
+      </div>
+      <p class="swipe-note">Swipe sideways on the page to read every column.</p>
+      <div id="preview"></div>
+      <section class="history">
+        <h2>All updates</h2>
+        <ul class="update-list" id="update-list"></ul>
+      </section>
+    </main>
+  </section>
+
+  <div class="modal" id="modal" hidden>
+    <form class="modal-card" id="passcode-form">
+      <h2>Enter passcode</h2>
+      <p>This file is locked.</p>
+      <input id="passcode" type="password" autocomplete="off" spellcheck="false" aria-label="Passcode" required>
+      <p class="error" id="passcode-error" role="alert"></p>
+      <div class="modal-actions">
+        <button class="ghost" id="passcode-cancel" type="button">Cancel</button>
+        <button class="primary" id="passcode-continue" type="submit">Continue</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/js/format.js"></script>
+  <script src="/js/sheet.js"></script>
+  <script src="/js/home.js"></script>
+</body>
+</html>

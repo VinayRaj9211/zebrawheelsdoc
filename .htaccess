@@ -1,0 +1,4 @@
+# Apache must not serve this folder. The app runs on Node so the
+# passcode, saved rate lists, and server files stay off the web root.
+Options -Indexes
+Require all denied
