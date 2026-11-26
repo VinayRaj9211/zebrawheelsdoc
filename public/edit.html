@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Edit rate list · Zebra Wheels</title>
   <link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="/css/app.css?v=3">
+  <link rel="stylesheet" href="/css/app.css?v=5">
 </head>
 <body>
   <header class="topbar">
@@ -18,12 +18,13 @@
       </div>
     </div>
     <div class="top-actions">
-      <a href="/">Back</a>
+      <a href="/" id="back-link">Back</a>
       <button class="primary" id="save-button" type="button" style="width:auto">Save</button>
     </div>
   </header>
   <main class="wrap">
-    <p class="swipe-note">Swipe sideways for every price. Up, Down, and Delete stay on the right of each row.</p>
+    <p class="swipe-note">Swipe sideways for every price. The vehicle name stays fixed. Up, Down, and Delete are on each row.</p>
+    <p class="hint" id="restore-note" hidden>Your last entered details are restored.</p>
     <article class="sheet editing" id="editor">
       <input class="title-input" id="company" aria-label="Company name" autocomplete="off">
       <input class="address-input" id="address" aria-label="Address" autocomplete="off">
@@ -76,6 +77,6 @@
     </div>
   </div>
   <script src="/js/format.js"></script>
-  <script src="/js/edit.js?v=3"></script>
+  <script src="/js/edit.js?v=5"></script>
 </body>
 </html>

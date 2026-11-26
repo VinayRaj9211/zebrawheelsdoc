@@ -18,6 +18,7 @@ if (missing.length) {
 }
 
 const DATA_FILE = path.join(__dirname, "data", "documents.json");
+const DRAFTS_FILE = path.join(__dirname, "data", "drafts.json");
 const MAX_FAILS = 5;
 const LOCK_MS = 15 * 60 * 1000;
 const attempts = new Map();
@@ -111,6 +112,7 @@ app.post("/api/login", (req, res) => {
 });
 
 app.post("/api/logout", (req, res) => {
+  clearDraft(req.sessionID);
   req.session.destroy(() => {
     res.clearCookie("zwdoc.sid");
     res.json({ ok: true });
@@ -187,11 +189,61 @@ app.post("/api/versions", async (req, res) => {
   store.versions.unshift(version);
   try {
     writeStore(store);
+    clearDraft(req.sessionID);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "The update could not be saved." });
   }
   res.json({ ok: true, version });
+});
+
+app.get("/api/draft", (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Sign in required." });
+  const map = readDraftMap();
+  res.json({ draft: map[req.sessionID] || null });
+});
+
+app.post("/api/draft", (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Sign in required." });
+  const draft = sanitizeDraft(req.body || {});
+  const map = readDraftMap();
+  const current = map[req.sessionID];
+  if (current && current.savedAt && draft.savedAt && new Date(draft.savedAt) < new Date(current.savedAt)) {
+    return res.json({ ok: true });
+  }
+  map[req.sessionID] = draft;
+  try {
+    writeDraftMap(map);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "The draft could not be saved." });
+  }
+  res.json({ ok: true });
+});
+
+app.delete("/api/draft", (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Sign in required." });
+  clearDraft(req.sessionID);
+  res.json({ ok: true });
+});
+
+app.delete("/api/versions/:id", (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Sign in required." });
+  const store = readStore();
+  const id = String(req.params.id || "");
+  const index = store.versions.findIndex((item) => item.id === id);
+  if (index < 0) return res.status(404).json({ error: "That update could not be found." });
+  if (store.versions.length < 2) {
+    return res.status(400).json({ error: "This is the only update, so it cannot be deleted." });
+  }
+  store.versions.splice(index, 1);
+  try {
+    writeStore(store);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "That update could not be deleted." });
+  }
+  res.json({ ok: true, versions: store.versions });
 });
 
 app.get("/edit", (req, res) => {
@@ -270,7 +322,7 @@ function asRows(list, kind) {
   return list
     .slice(0, 80)
     .map((row) => {
-      const vehicle = clean(row && row.vehicle, 60);
+      const vehicle = clean(row && row.vehicle, 60).toUpperCase();
       if (kind === "local") {
         return {
           vehicle,
@@ -296,6 +348,79 @@ function asTerms(terms) {
     .map((line) => clean(String(line).replace(/^\d+\.\s*/, ""), 240))
     .filter(Boolean)
     .slice(0, 40);
+}
+
+function readDraftMap() {
+  try {
+    const data = JSON.parse(fs.readFileSync(DRAFTS_FILE, "utf8"));
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function writeDraftMap(map) {
+  fs.mkdirSync(path.dirname(DRAFTS_FILE), { recursive: true });
+  const tmp = `${DRAFTS_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(map));
+  fs.copyFileSync(tmp, DRAFTS_FILE);
+  fs.unlinkSync(tmp);
+}
+
+function clearDraft(sessionId) {
+  if (!sessionId) return;
+  const map = readDraftMap();
+  if (!map[sessionId]) return;
+  delete map[sessionId];
+  try {
+    writeDraftMap(map);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function sanitizeDraft(input) {
+  const saved = new Date(input.savedAt);
+  return {
+    company: clean(input.company, 80),
+    address: clean(input.address, 180),
+    mobile: clean(input.mobile, 80),
+    localRows: looseRows(input.localRows, "local"),
+    outstationRows: looseRows(input.outstationRows, "out"),
+    terms: asTerms(input.terms),
+    draftsOpen: Boolean(input.draftsOpen),
+    draftLocal: looseFields(input.draftLocal, "local"),
+    draftOut: looseFields(input.draftOut, "out"),
+    savedAt: Number.isNaN(saved.getTime()) ? new Date().toISOString() : saved.toISOString(),
+  };
+}
+
+function looseRows(list, kind) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .slice(0, 80)
+    .map((row) => looseFields(row, kind))
+    .filter(Boolean);
+}
+
+function looseFields(row, kind) {
+  if (!row || typeof row !== "object") return null;
+  const vehicle = clean(row.vehicle, 60).toUpperCase();
+  const next = kind === "local"
+    ? {
+        vehicle,
+        fullDay: cleanMoney(row.fullDay),
+        trip12: cleanMoney(row.trip12),
+        extraKm: cleanMoney(row.extraKm),
+        extraHrs: cleanMoney(row.extraHrs),
+        night: cleanMoney(row.night),
+      }
+    : {
+        vehicle,
+        extraKm: cleanMoney(row.extraKm),
+        night: cleanMoney(row.night),
+      };
+  return Object.values(next).some((value) => String(value || "").trim()) ? next : null;
 }
 
 function clean(value, max) {

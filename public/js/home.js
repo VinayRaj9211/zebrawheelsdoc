@@ -22,6 +22,7 @@
   const icons = {
     view: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
     download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-7 3 1 9h6l1-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
 
   let versions = [];
@@ -90,6 +91,7 @@
   }
 
   async function logout() {
+    sessionStorage.removeItem("zwdoc.editorDraft");
     await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
     versions = [];
     showLogin();
@@ -133,6 +135,7 @@
           <div class="update-actions">
             <button type="button" data-act="view" aria-label="View this update" aria-pressed="${active ? "true" : "false"}">${icons.view}</button>
             <button type="button" data-act="download" aria-label="Download this update">${icons.download}</button>
+            <button type="button" class="danger" data-act="delete" aria-label="Delete this update">${icons.delete}</button>
           </div>
         </li>`;
       })
@@ -149,6 +152,42 @@
     const id = button.closest("[data-id]").dataset.id;
     if (button.dataset.act === "view") showVersion(id, true);
     if (button.dataset.act === "download") openPasscode({ type: "download", id });
+    if (button.dataset.act === "delete") deleteVersion(id);
+  }
+
+  async function deleteVersion(id) {
+    const version = versions.find((item) => item.id === id);
+    if (!version) return;
+    const when = formatWhen(version.updatedAt);
+    if (versions.length < 2) {
+      window.alert("This is the only update, so it cannot be deleted.");
+      return;
+    }
+    if (!window.confirm(`Delete this update from ${when}?`)) return;
+    const button = updateList.querySelector(`[data-id="${CSS.escape(id)}"] button[data-act="delete"]`);
+    if (button) button.disabled = true;
+    try {
+      const res = await fetch("/api/versions/" + encodeURIComponent(id), {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        showLogin();
+        return;
+      }
+      if (!res.ok) {
+        window.alert(data.error || "That update could not be deleted.");
+        if (button) button.disabled = false;
+        return;
+      }
+      versions = data.versions || [];
+      const stillHere = versions.some((item) => item.id === currentId);
+      showVersion(stillHere ? currentId : versions[0] && versions[0].id, false);
+    } catch (error) {
+      window.alert("Could not delete that update. Try again.");
+      if (button) button.disabled = false;
+    }
   }
 
   function openPasscode(action) {

@@ -1,8 +1,6 @@
 (function () {
   const { esc } = window.ZWFormat;
-  const upIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const downIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-7 3 1 9h6l1-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const DRAFT_KEY = "zwdoc.editorDraft";
 
   const companyInput = document.getElementById("company");
   const addressInput = document.getElementById("address");
@@ -19,7 +17,11 @@
 
   let doc = null;
   let dirty = false;
+  let ready = false;
+  let keepDraft = true;
   let draftsOpen = false;
+  let pendingDrafts = null;
+  let persistTimer = null;
   let armed = null;
   let flash = { local: -1, out: -1 };
 
@@ -28,21 +30,25 @@
     doc.company = companyInput.value;
     document.getElementById("sign-right").textContent = "FOR " + companyInput.value;
     dirty = true;
+    schedulePersist();
   });
   addressInput.addEventListener("input", () => {
     if (!doc) return;
     doc.address = addressInput.value;
     dirty = true;
+    schedulePersist();
   });
   mobileInput.addEventListener("input", () => {
     if (!doc) return;
     doc.mobile = mobileInput.value;
     dirty = true;
+    schedulePersist();
   });
   termsInput.addEventListener("input", () => {
     if (!doc) return;
     doc.terms = termsInput.value.split("\n");
     dirty = true;
+    schedulePersist();
   });
   addToggle.addEventListener("click", () => {
     draftsOpen = !draftsOpen;
@@ -59,6 +65,7 @@
     if (!result.ok) editorError.textContent = result.error;
   });
   document.getElementById("save-button").addEventListener("click", save);
+  document.getElementById("back-link").addEventListener("click", leaveEditor);
   table.addEventListener("input", onCellInput);
   table.addEventListener("click", onTableClick);
   document.getElementById("move-up").addEventListener("click", () => armed && move(armed.section, armed.index, -1));
@@ -73,10 +80,9 @@
     removeRow(armed.section, armed.index);
   });
   window.addEventListener("resize", updateMoveBar);
-  window.addEventListener("beforeunload", (event) => {
-    if (!dirty) return;
-    event.preventDefault();
-    event.returnValue = "";
+  window.addEventListener("pagehide", () => {
+    if (!keepDraft || !doc || !ready) return;
+    persistDraft({ keepalive: true });
   });
 
   boot();
@@ -99,21 +105,130 @@
     }
     const data = await res.json();
     const latest = data.versions[0];
+    const draft = await loadDraft();
+    if (draft) applyState(draft, true);
+    else applyState(latest, false);
+    ready = true;
+  }
+
+  function applyState(source, restored) {
     doc = {
-      company: latest.company || "",
-      address: latest.address || "",
-      mobile: latest.mobile || "",
-      localRows: (latest.localRows || []).map((row) => ({ ...row })),
-      outstationRows: (latest.outstationRows || []).map((row) => ({ ...row })),
-      terms: [...(latest.terms || [])],
+      company: source.company || "",
+      address: source.address || "",
+      mobile: source.mobile || "",
+      localRows: (source.localRows || []).map((row) => copyRow(row, "local")),
+      outstationRows: (source.outstationRows || []).map((row) => copyRow(row, "out")),
+      terms: [...(source.terms || [])],
     };
+    draftsOpen = restored ? Boolean(source.draftsOpen) : false;
+    pendingDrafts = restored
+      ? {
+          local: source.draftLocal ? copyRow(source.draftLocal, "local") : null,
+          out: source.draftOut ? copyRow(source.draftOut, "out") : null,
+        }
+      : null;
     companyInput.value = doc.company;
     addressInput.value = doc.address;
     mobileInput.value = doc.mobile;
     termsInput.value = doc.terms.join("\n");
     document.getElementById("sign-right").textContent = "FOR " + doc.company;
+    const note = document.getElementById("restore-note");
+    note.hidden = !restored;
     renderRows();
-    dirty = false;
+    dirty = restored;
+  }
+
+  function copyRow(row, kind) {
+    const vehicle = String((row && row.vehicle) || "").trim().toUpperCase();
+    if (kind === "local") {
+      return {
+        vehicle,
+        fullDay: (row && row.fullDay) || "",
+        trip12: (row && row.trip12) || "",
+        extraKm: (row && row.extraKm) || "",
+        extraHrs: (row && row.extraHrs) || "",
+        night: (row && row.night) || "",
+      };
+    }
+    return {
+      vehicle,
+      extraKm: (row && row.extraKm) || "",
+      night: (row && row.night) || "",
+    };
+  }
+
+  function upperName(value) {
+    return String(value || "").toUpperCase();
+  }
+
+  async function loadDraft() {
+    let local = null;
+    try {
+      local = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
+    } catch (error) {
+      local = null;
+    }
+    let remote = null;
+    try {
+      const res = await fetch("/api/draft", { credentials: "same-origin" });
+      if (res.ok) {
+        const data = await res.json();
+        remote = data.draft || null;
+      }
+    } catch (error) {
+      remote = null;
+    }
+    if (!local) return remote;
+    if (!remote) return local;
+    return new Date(local.savedAt || 0) >= new Date(remote.savedAt || 0) ? local : remote;
+  }
+
+  function snapshot() {
+    return {
+      company: companyInput.value,
+      address: addressInput.value,
+      mobile: mobileInput.value,
+      localRows: doc.localRows,
+      outstationRows: doc.outstationRows,
+      terms: termsInput.value.split("\n"),
+      draftsOpen,
+      draftLocal: readDraft("local"),
+      draftOut: readDraft("out"),
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  function persistDraft(options) {
+    if (!doc || !keepDraft) return Promise.resolve();
+    const state = snapshot();
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+    return fetch("/api/draft", {
+      method: "POST",
+      credentials: "same-origin",
+      keepalive: Boolean(options && options.keepalive),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    }).catch(() => {});
+  }
+
+  function schedulePersist() {
+    if (!ready || !keepDraft || !doc) return;
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => persistDraft(), 300);
+  }
+
+  async function leaveEditor(event) {
+    event.preventDefault();
+    clearTimeout(persistTimer);
+    await persistDraft();
+    window.location.href = "/";
+  }
+
+  async function clearStoredDraft() {
+    keepDraft = false;
+    clearTimeout(persistTimer);
+    sessionStorage.removeItem(DRAFT_KEY);
+    await fetch("/api/draft", { method: "DELETE", credentials: "same-origin", keepalive: true }).catch(() => {});
   }
 
   function rowsOf(section) {
@@ -121,7 +236,8 @@
   }
 
   function renderRows() {
-    const drafts = readDrafts();
+    const drafts = pendingDrafts || readDrafts();
+    pendingDrafts = null;
     localBody.innerHTML = doc.localRows.map((row, index) => dataRow("local", row, index)).join("") +
       (draftsOpen ? draftRow("local") : "");
     outBody.innerHTML = `<tr class="split"><td class="split-cell" colspan="7">Outstation</td></tr>` +
@@ -186,7 +302,7 @@
         <td><input class="cell-input" data-draft-field="extraKm" inputmode="decimal" placeholder="₹" aria-label="Local extra km" autocomplete="off"></td>
         <td><input class="cell-input" data-draft-field="extraHrs" inputmode="decimal" placeholder="₹" aria-label="Local extra hours" autocomplete="off"></td>
         <td><input class="cell-input" data-draft-field="night" inputmode="decimal" placeholder="₹" aria-label="Local night charges" autocomplete="off"></td>
-        <td class="row-actions actions-col"></td>
+        ${actions("", "disabled")}
       </tr>`;
     }
     return `<tr class="draft" data-draft="out">
@@ -195,7 +311,7 @@
       <td><input class="cell-input" data-draft-field="extraKm" inputmode="decimal" placeholder="₹" aria-label="Outstation extra km" autocomplete="off"></td>
       <td>---</td>
       <td><input class="cell-input" data-draft-field="night" inputmode="decimal" placeholder="₹" aria-label="Outstation night charges" autocomplete="off"></td>
-      <td class="row-actions actions-col"></td>
+      ${actions("", "disabled")}
     </tr>`;
   }
 
@@ -241,52 +357,98 @@
     }
     flash = { local: -1, out: -1 };
     if (localHas) {
-      doc.localRows.push({
-        vehicle: local.vehicle.trim(),
-        fullDay: local.fullDay || "",
-        trip12: local.trip12 || "",
-        extraKm: local.extraKm || "",
-        extraHrs: local.extraHrs || "",
-        night: local.night || "",
-      });
+      doc.localRows.push(copyRow(local, "local"));
       flash.local = doc.localRows.length - 1;
     }
     if (outHas) {
-      doc.outstationRows.push({
-        vehicle: out.vehicle.trim(),
-        extraKm: out.extraKm || "",
-        night: out.night || "",
-      });
+      doc.outstationRows.push(copyRow(out, "out"));
       flash.out = doc.outstationRows.length - 1;
     }
     draftsOpen = false;
     dirty = true;
     editorError.textContent = "";
     renderRows();
+    schedulePersist();
     const target = document.querySelector("tr.just-added");
     if (target) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
     return { ok: true };
   }
 
   function onCellInput(event) {
-    const field = event.target.dataset.field;
-    if (!field || !doc) return;
-    const row = event.target.closest("tr");
-    const list = rowsOf(row.dataset.section);
-    list[Number(row.dataset.index)][field] = event.target.value;
-    dirty = true;
-    if (armed && armed.section === row.dataset.section && armed.index === Number(row.dataset.index) && field === "vehicle") {
-      moveLabel.textContent = event.target.value || "Row";
+    const input = event.target;
+    if (input.dataset.field === "vehicle" || input.dataset.draftField === "vehicle") forceUpper(input);
+    const field = input.dataset.field;
+    if (!field || !doc) {
+      if (input.dataset.draftField) {
+        dirty = true;
+        schedulePersist();
+      }
+      return;
     }
+    const row = input.closest("tr");
+    const list = rowsOf(row.dataset.section);
+    list[Number(row.dataset.index)][field] = input.value;
+    dirty = true;
+    schedulePersist();
+    if (armed && armed.section === row.dataset.section && armed.index === Number(row.dataset.index) && field === "vehicle") {
+      moveLabel.textContent = input.value || "Row";
+    }
+  }
+
+  function forceUpper(input) {
+    const upper = upperName(input.value);
+    if (input.value === upper) return;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    input.value = upper;
+    if (start != null) input.setSelectionRange(start, end);
   }
 
   function onTableClick(event) {
     const moveButton = event.target.closest("[data-move]");
     const removeButton = event.target.closest("[data-remove]");
+    const draft = event.target.closest("tr[data-draft]");
+    if (draft) {
+      onDraftAction(draft.dataset.draft, moveButton, removeButton);
+      return;
+    }
     const row = event.target.closest("tr[data-index]");
     if (!row) return;
     if (moveButton && !moveButton.disabled) move(row.dataset.section, Number(row.dataset.index), moveButton.dataset.move === "up" ? -1 : 1);
     if (removeButton) removeRow(row.dataset.section, Number(row.dataset.index));
+  }
+
+  function onDraftAction(section, moveButton, removeButton) {
+    if (removeButton) {
+      clearDraftRow(section);
+      return;
+    }
+    if (!moveButton || moveButton.disabled) return;
+    const before = rowsOf(section).length;
+    const result = commitDrafts(false);
+    if (!result.ok) {
+      editorError.textContent = result.error;
+      return;
+    }
+    const after = rowsOf(section).length;
+    if (after > before) move(section, after - 1, moveButton.dataset.move === "up" ? -1 : 1);
+  }
+
+  function clearDraftRow(section) {
+    const label = section === "local" ? "local cost row" : "outstation cost row";
+    if (!window.confirm(`Delete this ${label}?`)) return;
+    const row = document.querySelector(`tr[data-draft="${section}"]`);
+    if (row) row.querySelectorAll("input").forEach((input) => {
+      input.value = "";
+    });
+    const localHas = Object.values(readDraft("local") || {}).some((value) => String(value).trim());
+    const outHas = Object.values(readDraft("out") || {}).some((value) => String(value).trim());
+    if (!localHas && !outHas) {
+      draftsOpen = false;
+      renderRows();
+    }
+    dirty = true;
+    schedulePersist();
   }
 
   function move(section, index, delta) {
@@ -299,6 +461,7 @@
     flash = { local: -1, out: -1 };
     if (armed && armed.section === section && armed.index === index) armed = { section, index: next };
     renderRows();
+    schedulePersist();
     const moved = document.querySelector(`tr[data-section="${section}"][data-index="${next}"]`);
     if (moved) moved.scrollIntoView({ block: "nearest" });
   }
@@ -310,6 +473,7 @@
     if (!window.confirm(`Delete ${name}?`)) return;
     rows.splice(index, 1);
     dirty = true;
+    schedulePersist();
     if (armed && armed.section === section) {
       if (armed.index === index) armed = null;
       else if (armed.index > index) armed.index -= 1;
@@ -409,6 +573,7 @@
         return;
       }
       dirty = false;
+      await clearStoredDraft();
       window.location.href = "/";
     } catch (error) {
       editorError.textContent = "Could not reach the app. Try again.";
