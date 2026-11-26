@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Edit rate list · Zebra Wheels</title>
   <link rel="icon" href="/favicon.svg">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/app.css?v=3">
 </head>
 <body>
   <header class="topbar">
@@ -23,7 +23,7 @@
     </div>
   </header>
   <main class="wrap">
-    <p class="swipe-note">Swipe sideways to reach every price. Press and hold a row to move it.</p>
+    <p class="swipe-note">Swipe sideways for every price. Up, Down, and Delete stay on the right of each row.</p>
     <article class="sheet editing" id="editor">
       <input class="title-input" id="company" aria-label="Company name" autocomplete="off">
       <input class="address-input" id="address" aria-label="Address" autocomplete="off">
@@ -42,7 +42,7 @@
               <th>EXTRA<br>KM(per km)</th>
               <th>EXTRA HRS<br>(per hour)</th>
               <th>NIGHT<br>CHARGES</th>
-              <th class="actions-col"><span class="sr-only">Move</span></th>
+              <th class="actions-col">Move</th>
             </tr>
           </thead>
           <tbody id="local-body"></tbody>
@@ -51,8 +51,7 @@
       </div>
       <div class="editor-tools">
         <button class="secondary" id="add-toggle" type="button">+ Add row</button>
-        <p class="hint desktop-only">Use the arrows to move a row up or down.</p>
-        <p class="hint mobile-only">Press and hold a row, then use Up or Down.</p>
+        <p class="hint">Use Up and Down to move a row. Delete asks you to confirm.</p>
         <div class="draft-actions" id="draft-actions" hidden>
           <button class="primary" id="commit-drafts" type="button">Add filled rows</button>
           <button class="ghost" id="cancel-drafts" type="button">Cancel</button>
@@ -77,6 +76,6 @@
     </div>
   </div>
   <script src="/js/format.js"></script>
-  <script src="/js/edit.js"></script>
+  <script src="/js/edit.js?v=3"></script>
 </body>
 </html>

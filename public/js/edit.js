@@ -132,7 +132,6 @@
     addToggle.textContent = draftsOpen ? "Close new rows" : "+ Add row";
     draftActions.hidden = !draftsOpen;
     flash = { local: -1, out: -1 };
-    bindPress();
     renderArmed();
     updateMoveBar();
     document.querySelectorAll("tr.just-added").forEach((row) => {
@@ -172,9 +171,9 @@
 
   function actions(up, down) {
     return `<td class="row-actions actions-col">
-      <button type="button" class="icon-btn" data-move="up" aria-label="Move up" ${up}>${upIcon}</button>
-      <button type="button" class="icon-btn" data-move="down" aria-label="Move down" ${down}>${downIcon}</button>
-      <button type="button" class="icon-btn danger" data-remove="1" aria-label="Remove row">${removeIcon}</button>
+      <button type="button" class="row-btn" data-move="up" ${up}>Up</button>
+      <button type="button" class="row-btn" data-move="down" ${down}>Down</button>
+      <button type="button" class="row-btn danger" data-remove="1">Delete</button>
     </td>`;
   }
 
@@ -307,7 +306,8 @@
   function removeRow(section, index) {
     const rows = rowsOf(section);
     const vehicle = rows[index] && rows[index].vehicle;
-    if (!window.confirm(`Remove ${vehicle || "this row"}?`)) return;
+    const name = vehicle ? `“${vehicle}”` : "this row";
+    if (!window.confirm(`Delete ${name}?`)) return;
     rows.splice(index, 1);
     dirty = true;
     if (armed && armed.section === section) {
